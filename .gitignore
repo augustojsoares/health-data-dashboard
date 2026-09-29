@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.pnpm-store/
+.env
+.env.*
+!.env.example
+.netlify/
+supabase/.temp/
+health-data-dashboard-dist.zip

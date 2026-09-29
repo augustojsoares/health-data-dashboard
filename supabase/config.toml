@@ -1,0 +1,8 @@
+project_id = "health-data-dashboard"
+
+[functions.ingest-openscale]
+verify_jwt = false
+
+[functions.ingest-health-sync]
+verify_jwt = false
+
