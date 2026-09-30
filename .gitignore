@@ -7,3 +7,4 @@ dist/
 .netlify/
 supabase/.temp/
 health-data-dashboard-dist.zip
+packages/*/dist/

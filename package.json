@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "pnpm run build:health-core && tsc -b && vite build",
+    "build:health-core": "tsc -p packages/health-core/tsconfig.json",
+    "test": "pnpm run test:health-core",
+    "test:health-core": "pnpm run build:health-core && node --test packages/health-core/test/*.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

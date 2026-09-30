@@ -22,6 +22,25 @@ Do not use Netlify Drop uploads for application updates. They do not create a tr
 - `ingest-health-sync`: generic idempotent endpoint for CSV imports.
 - An optional Apps Script CSV importer with a daily trigger entry point.
 - A React dashboard with authentication, provenance-aware current metrics, and a weight trend.
+- `@health-data-dashboard/health-core`, a dependency-free TypeScript package that
+  defines the canonical metric registry and runs declarative import mappings.
+
+## Health mapping core
+
+The canonical registry in `packages/health-core` is the contract for the next
+ingestion adapters and mapper UI. It defines stable metric keys, canonical
+units, import guardrails, record-time semantics, and the record types each
+metric can appear in. Its range checks catch malformed source data; they are
+not clinical reference ranges.
+
+The mapper supports nested paths, fallbacks, defaults, conditional fields,
+nested objects, object merges, controlled number/unit/duration/timestamp
+transforms, and registry validation. It has no browser UI and performs no
+storage. An adapter maps raw data to the canonical observation contract, then
+the ingestion endpoint remains responsible for authorization and persistence.
+
+Run `pnpm test` to compile and test the package, or `pnpm run build` to test it
+as part of the dashboard build.
 
 ## Deploy Supabase
 
