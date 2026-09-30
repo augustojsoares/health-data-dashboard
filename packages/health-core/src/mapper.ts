@@ -4,7 +4,7 @@ export type Path = string
 export type Condition = { path: Path; exists?: boolean; equals?: unknown; notEquals?: unknown }
 export type Transform =
   | { kind: 'number'; decimalComma?: boolean }
-  | { kind: 'timestamp'; timezone?: string }
+  | { kind: 'timestamp'; timezone?: string; epoch?: 's' | 'ms' }
   | { kind: 'duration'; from: 's' | 'min' | 'h'; to: 's' | 'min' | 'h' }
   | { kind: 'unit'; from: string | Path; to: string }
   | { kind: 'trim' }
@@ -17,6 +17,7 @@ export type MappingNode = string | number | boolean | null | {
   transforms?: Transform[]
   map?: Record<string, MappingNode>
   merge?: MappingNode[]
+  each?: { from: Path; map: Record<string, MappingNode> }
 }
 export type MapperDefinition = { id: string; version: number; target: Record<string, MappingNode>; required?: readonly Path[] }
 export type MappingResult = { value: Record<string, unknown>; issues: ValidationIssue[] }
@@ -24,11 +25,29 @@ export type MappingResult = { value: Record<string, unknown>; issues: Validation
 const missing = Symbol('missing')
 const isNode = (value: MappingNode): value is Exclude<MappingNode, string | number | boolean | null> => typeof value === 'object' && value !== null
 
+type PathSegment = string | number | 'collect'
+
+/**
+ * Reads plain dotted paths plus `items[0]`, `items[].value`, and
+ * `["a.key.with.dots"]`. Collection paths return an array of present values.
+ */
 export function getPath(input: unknown, path: Path): unknown {
-  return path.split('.').reduce<unknown>((value, part) => {
+  const segments: PathSegment[] = []
+  const matcher = /([^.[\]]+)|\[(?:(\d+)|(['"])(.*?)\3)?\]/g
+  let match: RegExpExecArray | null
+  while ((match = matcher.exec(path))) {
+    const segment = match[1] ?? (match[2] !== undefined ? Number(match[2]) : match[3] !== undefined ? match[4] : 'collect')
+    segments.push(segment as PathSegment)
+  }
+  if (!segments.length) return undefined
+  const read = (value: unknown, index: number): unknown => {
+    if (index === segments.length) return value
+    const segment = segments[index]
+    if (segment === 'collect') return Array.isArray(value) ? value.map(item => read(item, index + 1)).filter(item => item !== undefined) : undefined
     if (value === null || typeof value !== 'object') return undefined
-    return (value as Record<string, unknown>)[part]
-  }, input)
+    return read((value as Record<string | number, unknown>)[segment], index + 1)
+  }
+  return read(input, 0)
 }
 
 function conditionMatches(source: unknown, condition: Condition) {
@@ -55,6 +74,12 @@ function transform(value: unknown, transforms: readonly Transform[], source: unk
       return Number.isFinite(parsed) ? parsed : undefined
     }
     if (item.kind === 'timestamp') {
+      if (item.epoch) {
+        const numeric = typeof current === 'number' ? current : Number(current)
+        const milliseconds = item.epoch === 's' ? numeric * 1000 : numeric
+        const date = new Date(milliseconds)
+        return Number.isFinite(date.getTime()) ? date.toISOString() : undefined
+      }
       const text = String(current).trim()
       const date = new Date(item.timezone && !/[zZ]|[+-]\d\d:\d\d$/.test(text) ? `${text} ${item.timezone}` : text)
       return Number.isFinite(date.getTime()) ? date.toISOString() : undefined
@@ -76,6 +101,11 @@ function resolve(node: MappingNode, source: unknown): unknown {
       if (value !== missing && value !== undefined) result[key] = value
     }
     return result
+  }
+  if (node.each) {
+    const collection = getPath(source, node.each.from)
+    if (!Array.isArray(collection)) return missing
+    return collection.map(item => resolve({ map: node.each!.map }, item)).filter(item => item !== missing)
   }
   if (node.merge) {
     return node.merge.reduce<Record<string, unknown>>((result, part) => {

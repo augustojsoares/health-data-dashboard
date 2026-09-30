@@ -33,11 +33,12 @@ units, import guardrails, record-time semantics, and the record types each
 metric can appear in. Its range checks catch malformed source data; they are
 not clinical reference ranges.
 
-The mapper supports nested paths, fallbacks, defaults, conditional fields,
-nested objects, object merges, controlled number/unit/duration/timestamp
-transforms, and registry validation. It has no browser UI and performs no
-storage. An adapter maps raw data to the canonical observation contract, then
-the ingestion endpoint remains responsible for authorization and persistence.
+The mapper supports nested, indexed, collected, and quoted-key paths;
+fallbacks, defaults, conditional fields, nested objects, object merges, and
+per-array-item mappings; controlled number/unit/duration/timestamp transforms;
+and registry validation. It has no browser UI and performs no storage. An
+adapter maps raw data to the canonical observation contract, then the ingestion
+endpoint remains responsible for authorization and persistence.
 
 Run `pnpm test` to compile and test the package, or `pnpm run build` to test it
 as part of the dashboard build.

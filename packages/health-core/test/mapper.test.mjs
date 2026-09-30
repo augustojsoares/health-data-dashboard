@@ -26,6 +26,26 @@ test('mapper reports missing required output fields', () => {
   assert.deepEqual(result.issues, [{ path: 'timestamp', message: 'is required' }])
 })
 
+test('mapper supports indexed, collected, and quoted path segments with array-item maps', () => {
+  const source = {
+    readings: [{ metric: 'weight', value: '75.2' }, { metric: 'body_fat', value: '18.4' }],
+    'device.name': 'Scale'
+  }
+  assert.equal(getPath(source, 'readings[0].metric'), 'weight')
+  assert.deepEqual(getPath(source, 'readings[].value'), ['75.2', '18.4'])
+  assert.equal(getPath(source, '["device.name"]'), 'Scale')
+  const result = mapRecord({
+    id: 'array-mapping', version: 1,
+    target: { metrics: { each: { from: 'readings', map: { key: { from: 'metric' }, value: { from: 'value', transforms: [{ kind: 'number' }] } } } } }
+  }, source)
+  assert.deepEqual(result.value.metrics, [{ key: 'weight', value: 75.2 }, { key: 'body_fat', value: 18.4 }])
+})
+
+test('timestamp transform handles explicit Unix epochs', () => {
+  const result = mapRecord({ id: 'epoch', version: 1, target: { timestamp: { from: 'recorded', transforms: [{ kind: 'timestamp', epoch: 's' }] } } }, { recorded: 1727683200 })
+  assert.equal(result.value.timestamp, '2024-09-30T08:00:00.000Z')
+})
+
 test('health transforms convert numeric formats and supported units to the registry unit', () => {
   assert.deepEqual(mapHealthMetric('weight', '176,37', 'lb').metric, { key: 'weight', value: 80.00008629690001, unit: 'kg' })
   assert.deepEqual(mapHealthMetric('sleep_duration', 8, 'h').metric, { key: 'sleep_duration', value: 480, unit: 'min' })
