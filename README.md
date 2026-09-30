@@ -43,6 +43,12 @@ endpoint remains responsible for authorization and persistence.
 Run `pnpm test` to compile and test the package, or `pnpm run build` to test it
 as part of the dashboard build.
 
+Apply `202609300001_mapper_definitions.sql` before deploying the updated
+`ingest-health-sync` function. The function records every mapper outcome in
+`health_mapping_runs`, including rejected records and validation issues. The
+dashboard's **Import mapper** page previews a supplied raw record in the
+browser and saves a versioned private mapper copy; it never uploads a preview.
+
 ## Deploy Supabase
 
 1. Create a Supabase project in the free plan and enable the Google provider. Add `https://YOUR-NETLIFY-SITE.netlify.app` and `http://localhost:5173` to Supabase Authentication URL Configuration after the site is created.

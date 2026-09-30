@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { canonicalizeRecord } from '../_shared/canonical.ts'
 
 const encoder = new TextEncoder()
 const constantTimeEqual = (left: string, right: string) => {
@@ -34,12 +35,19 @@ Deno.serve(async request => {
   const db = createClient(Deno.env.get('SUPABASE_URL')!, serviceRoleKey())
   const ownerId = configuredOwnerId()
   await db.from('ingestion_raw_events').upsert({ source: 'health_sync', payload_hash: await sha256(body), payload: body }, { onConflict: 'source,payload_hash' })
+  let accepted=0,rejected=0
   for (const record of body.records) {
-    if (!record.source || !record.sourceIdentity || !record.timestamp || !Array.isArray(record.metrics)) continue
-    const base = { owner_id: ownerId, source: record.source, source_identity: record.sourceIdentity, logical_identity: record.logicalIdentity ?? null, source_timestamp: record.timestamp, local_date: localDate(record.timestamp), observation_type: record.type, raw_measurement: record.raw, provenance: record.provenance ?? {} }
+    if (!record.source || !record.sourceIdentity || !record.timestamp || !Array.isArray(record.metrics)) { rejected++; continue }
+    const normalized=canonicalizeRecord(record)
+    const run={owner_id:ownerId,mapper_id:'health-sync-canonical',mapper_version:1,source:record.source,source_identity:record.sourceIdentity,status:normalized.issues.length?'rejected':'accepted',issues:normalized.issues,output:normalized.issues.length?null:normalized.record}
+    const audit=await db.from('health_mapping_runs').insert(run)
+    if(audit.error) return Response.json({error:audit.error.message},{status:500})
+    if(normalized.issues.length){rejected++;continue}
+    const base = { owner_id: ownerId, source: record.source, source_identity: record.sourceIdentity, logical_identity: record.logicalIdentity ?? null, source_timestamp: normalized.record.timestamp, local_date: localDate(normalized.record.timestamp), observation_type: normalized.record.type, raw_measurement: record.raw, provenance: { ...(record.provenance ?? {}), mapper_id:'health-sync-canonical', mapper_version:1 } }
     const saved = await db.from('health_observations').upsert(base, { onConflict: 'source,source_identity' }).select('id').single(); if (saved.error) return Response.json({ error: saved.error.message }, { status: 500 })
-    const metrics = record.metrics.filter(m => Number.isFinite(m.value)).map(m => ({ observation_id: saved.data.id, owner_id: base.owner_id, metric_key: m.key, value_numeric: m.value, unit: m.unit ?? null, is_derived: Boolean(m.isDerived), source_timestamp: base.source_timestamp }))
+    const metrics = normalized.record.metrics.map(m => ({ observation_id: saved.data.id, owner_id: base.owner_id, metric_key: m.key, value_numeric: m.value, unit: m.unit, is_derived: Boolean(m.isDerived), source_timestamp: base.source_timestamp }))
     if (metrics.length) { const res = await db.from('health_metrics').upsert(metrics, { onConflict: 'observation_id,metric_key' }); if (res.error) return Response.json({ error: res.error.message }, { status: 500 }) }
+    accepted++
   }
-  return Response.json({ accepted: body.records.length })
+  return Response.json({ accepted, rejected })
 })
