@@ -5,6 +5,7 @@ dist/
 .env.*
 !.env.example
 .netlify/
+.tools/
 supabase/.temp/
 health-data-dashboard-dist.zip
 packages/*/dist/
